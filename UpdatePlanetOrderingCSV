@@ -22,7 +22,7 @@ files <- get_bucket(bucket_name, prefix = "inbox/")
 # Filter CSV files
 csv_files <- files %>%
   sapply(function(x) x$Key) %>%
-  grep("\\.csv$", ., value = TRUE)
+  grep("2024.*\\.csv$", ., value = TRUE)
 
 # Define fixed asset string and download item type
 download_item_assets <- "basic_analytic_4b;basic_analytic_4b_rpc;basic_analytic_4b_xml;basic_analytic_8b;basic_analytic_8b_xml;basic_udm2;ortho_analytic_4b;ortho_analytic_4b_sr;ortho_analytic_4b_xml;ortho_analytic_8b;ortho_analytic_8b_sr;ortho_analytic_8b_xml;ortho_udm2;ortho_visual"
