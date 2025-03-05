@@ -1,0 +1,64 @@
+# Script to update outdated Planet ordering CSVs in S3
+# Author: Nidhi Jha
+# Description: This script fetches outdated CSV files from S3, processes them to update the required fields, and uploads the modified files back to S3.
+
+# Load necessary libraries
+install.packages("aws.s3")
+library(aws.s3)
+library(dplyr)
+library(stringr)
+
+# Set AWS credentials securely (use environment variables or IAM roles in production)
+Sys.setenv("AWS_ACCESS_KEY_ID" = "<your-access-key>",
+           "AWS_SECRET_ACCESS_KEY" = "<your-secret-key>",
+           "AWS_SESSION_TOKEN" = "<your-session-token>")
+
+# Define S3 bucket name
+bucket_name <- "planet-order-csvs"
+
+# Retrieve list of files in the S3 bucket
+files <- get_bucket(bucket_name, prefix = "inbox/")
+
+# Filter CSV files
+csv_files <- files %>%
+  sapply(function(x) x$Key) %>%
+  grep("\\.csv$", ., value = TRUE)
+
+# Define fixed asset string and download item type
+download_item_assets <- "basic_analytic_4b;basic_analytic_4b_rpc;basic_analytic_4b_xml;basic_analytic_8b;basic_analytic_8b_xml;basic_udm2;ortho_analytic_4b;ortho_analytic_4b_sr;ortho_analytic_4b_xml;ortho_analytic_8b;ortho_analytic_8b_sr;ortho_analytic_8b_xml;ortho_udm2;ortho_visual"
+
+download_item_type <- "PSScene"
+
+# Process each CSV file
+for (file_key in csv_files) {
+  cat("Processing:", file_key, "\n")
+  
+  # Read the CSV file from S3
+  data <- tryCatch({
+    s3read_using(FUN = read.csv, object = file_key, bucket = bucket_name)
+  }, error = function(e) {
+    cat("Error reading:", file_key, "\n")
+    return(NULL)
+  })
+  
+  if (!is.null(data) && "download_item_id" %in% colnames(data)) {
+    # Transform Data
+    transformed_data <- data %>%
+      select(download_item_id) %>%
+      distinct() %>%
+      mutate(download_item_type = download_item_type,
+             download_item_assets = download_item_assets)
+    
+    # Generate new filename
+    file_name <- str_remove(basename(file_key), "\\.csv$")
+    new_file_key <- paste0("inbox/", file_name, "_updatedMar2025.csv")
+    
+    # Write the updated CSV back to S3
+    s3write_using(transformed_data, FUN = write.csv, object = new_file_key, bucket = bucket_name, row.names = FALSE)
+    cat("File written:", new_file_key, "\n")
+  } else {
+    cat("Skipping file (missing download_item_id):", file_key, "\n")
+  }
+}
+
+cat("All files processed.\n")
